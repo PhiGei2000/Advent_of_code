@@ -59,6 +59,7 @@
         "set": "cpp",
         "xtree": "cpp",
         "unordered_set": "cpp",
-        "xhash": "cpp"
+        "xhash": "cpp",
+        "stack": "cpp"
     }
 }

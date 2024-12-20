@@ -1,4 +1,5 @@
 #pragma once
+#include <ostream>
 
 struct Vec2 {
     int x;
@@ -48,6 +49,11 @@ struct Vec2 {
 
 Vec2 operator*(const int& scal, const Vec2& vec) {
     return Vec2(scal * vec.x, scal * vec.y);
+}
+
+std::ostream& operator<<(std::ostream& os, const Vec2& pos) {
+    os << pos.x << "," << pos.y;
+    return os;
 }
 
 #include <map>
