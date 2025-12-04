@@ -1,0 +1,18 @@
+[package]
+name = "Advent_of_code_2025"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[[bin]]
+name="1_secret_entrance"
+path="src/1_secret_entrance/main.rs"
+
+[[bin]]
+name="2_gift_shop"
+path = "src/2_gift_shop/main.rs"
+
+[[bin]]
+name = "3_lobby"
+path = "src/3_lobby/main.rs"
