@@ -16,3 +16,11 @@ path = "src/2_gift_shop/main.rs"
 [[bin]]
 name = "3_lobby"
 path = "src/3_lobby/main.rs"
+
+[[bin]]
+name = "4_printing_department"
+path = "src/4_printing_department/main.rs"
+
+[[bin]]
+name = "5_cafeteria"
+path = "src/5_cafeteria/main.rs"
