@@ -32,3 +32,7 @@ path = "src/6_trash_compactor/main.rs"
 [[bin]]
 name = "7_laboratories"
 path = "src/7_laboratories/main.rs"
+
+[[bin]]
+name = "8_playground"
+path = "src/8_playground/main.rs"

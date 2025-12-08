@@ -1,4 +1,3 @@
-use core::time;
 use std::{
     fmt::{Display, Write},
     fs::File,
@@ -206,15 +205,15 @@ fn main() -> std::io::Result<()> {
     let mut input = String::new();
     let _ = file.read_to_string(&mut input);
 
-    let mut tachyonManifold = TachyonManifold::from(input);
+    let mut tachyon_manifold = TachyonManifold::from(input);
 
-    let total_splits = tachyonManifold.calculate_beam();
+    let total_splits = tachyon_manifold.calculate_beam();
 
-    println!("{}", tachyonManifold);
+    println!("{}", tachyon_manifold);
     println!("{total_splits} splits count");
 
     // tachyonManifold.print_timelines();
-    let timelines_count = tachyonManifold.count_timelines();
+    let timelines_count = tachyon_manifold.count_timelines();
 
     println!("{timelines_count} timelines count");
     Ok(())
