@@ -36,3 +36,7 @@ path = "src/7_laboratories/main.rs"
 [[bin]]
 name = "8_playground"
 path = "src/8_playground/main.rs"
+
+[[bin]]
+name = "9_movie_theater"
+path = "src/9_movie_theater/main.rs"
