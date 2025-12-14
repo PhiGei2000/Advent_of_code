@@ -1,231 +1,156 @@
 use std::fmt::{Debug, Display};
 
 struct Machine {
-    indicator_lights: Vec<f32>,
-    buttons: Vec<Vec<f32>>,
+    indicator_lights: u32,
+    buttons: Vec<u32>,
     joltages: Vec<u32>,
+    buttons_count: usize,
 }
 
 #[derive(Clone)]
-struct Matrix {
-    entries: Vec<Vec<f32>>,
+struct F2Matrix {
+    entries: Vec<u32>,
+    height: usize,
+    width: usize,
 }
 
-impl Display for Matrix {
+impl Display for F2Matrix {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for row in self.entries.iter() {
-            writeln!(f, "{row:?}")?;
+            write!(f, "[")?;
+            for i in 0..self.width {
+                write!(f, " {} ", (row >> i) & 1)?;
+            }
+            writeln!(f, "]")?;
         }
 
         Ok(())
     }
 }
 
-impl Debug for Matrix {
+impl Debug for F2Matrix {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for row in self.entries.iter() {
-            writeln!(f, "{row:?}")?;
+            write!(f, "[")?;
+            for i in 0..self.width {
+                write!(f, " {} ", (row >> i) & 1)?;
+            }
+            writeln!(f, "]")?;
         }
 
         Ok(())
     }
 }
 
-impl Matrix {
-    fn new(height: usize, width: usize) -> Self {
-        Self {
-            entries: (0..height)
-                .map(|i| {
-                    let mut row = Vec::<f32>::new();
-                    row.resize(width.into(), 0.0);
-                    row[i] = 1.0f32;
-                    row
-                })
-                .collect(),
+impl F2Matrix {
+    fn from_cols(cols: Vec<u32>, height: usize) -> Self {
+        let width = cols.len();
+
+        let mut entries = vec![0; height];
+        for i in 0..height {
+            for j in 0..width {
+                entries[i] |= ((cols[j] >> i) & 1) << j;
+            }
         }
-    }
 
-    fn cols_count(&self) -> usize {
-        self.entries
-            .first()
-            .and_then(|row| Some(row.len()))
-            .unwrap_or_default()
-    }
-
-    fn rows_count(&self) -> usize {
-        self.entries.len()
-    }
-
-    fn zero(height: usize, width: usize) -> Self {
-        Self {
-            entries: (0..height)
-                .map(|i| {
-                    let mut row = Vec::<f32>::new();
-                    row.resize(width.into(), 0.0);
-                    row
-                })
-                .collect(),
+        F2Matrix {
+            entries,
+            height,
+            width,
         }
-    }
-
-    fn from_cols(cols: Vec<Vec<f32>>) -> Self {
-        let mat = Self { entries: cols };
-        mat.transpose()
     }
 
     fn swap_cols(&mut self, i: usize, j: usize) {
         for row in self.entries.iter_mut() {
-            row.swap(i, j);
+            let a = (*row >> i) & 1; // a = row[i]
+            *row &= !(1 << i); // row[i] = 0 
+            *row |= ((*row >> j) & 1) << i; // row[i] == row[j]
+            *row &= !(1 << j); // row[j] = 0
+            *row |= a << j; // row[j] = a
         }
     }
 
-    fn transpose(&self) -> Self {
-        let cols_count = self.cols_count();
-        let rows_count = self.rows_count();
-
-        let mut result = Self::zero(cols_count, rows_count);
-        for (i, row) in self.entries.iter().enumerate() {
-            for (j, &val) in row.iter().enumerate() {
-                result.entries[j][i] = val;
-            }
-        }
-
-        result
-    }
-
-    fn mul_row(&mut self, i: usize, factor: f32) {
-        for j in 0..self.cols_count() {
-            self.entries[i][j] *= factor;
-        }
-    }
-
-    fn mul_vec(&self, v: Vec<f32>) -> Vec<f32> {
-        assert_eq!(self.rows_count(), v.len());
-
-        self.entries
-            .iter()
-            .map(|row| row.iter().zip(v.iter()).map(|(&a, b)| a * b).sum())
-            .collect()
-    }
-
-    fn mul(&self, mat: Self) -> Self {
-        assert_eq!(self.cols_count(), mat.rows_count());
-
-        let mut result = Matrix::zero(self.rows_count(), mat.cols_count());
-        for i in 0..self.rows_count() {
-            for j in 0..mat.cols_count() {
-                for k in 0..self.cols_count() {
-                    result.entries[i][j] += self.entries[i][k] * mat.entries[k][j];
-                }
-            }
-        }
-
-        result
-    }
-
-    fn split_by_col(&self, col: usize) -> (Self, Self) {
-        assert_eq!(col <= self.cols_count(), true);
-
-        let mut result = (Matrix { entries: vec![] }, Matrix { entries: vec![] });
-        for row in self.entries.iter() {
-            result
-                .0
-                .entries
-                .push(row.iter().take(col).map(|&val| val).collect());
-            result
-                .1
-                .entries
-                .push(row.iter().skip(col).map(|&val| val).collect());
-        }
-
-        result
-    }
-
-    fn gauss(&self, v: &Vec<f32>) -> (Self, Vec<f32>) {
-        // assert!(self.rows_count() <= self.cols_count());
-        // assert!(v.len() <= self.cols_count());
-
+    fn gauss(&self, v: u32) -> (Self, u32) {
         let mut result = self.clone();
 
-        let n = self.rows_count();
-        if self.rows_count() < self.cols_count() {
-            result.entries.resize(v.len(), vec![0.0; self.cols_count()]);
-        } else if self.rows_count() > self.cols_count() {
-            result
-                .entries
-                .iter_mut()
-                .for_each(|entry| entry.resize(self.rows_count(), 0.0));
+        if self.width < self.height {
+            result.width = self.height;
+        } else if self.width > self.height {
+            result.entries.resize(self.width, 0);
+            result.height = self.width;
         }
+        let n = result.height;
+        let mut rows = (0..result.height).collect::<Vec<usize>>();
+        let mut linear_dependent_cols: Vec<usize> = vec![];
 
-        let mut v = v.clone();
-        if v.len() < self.cols_count() {
-            v.resize(self.cols_count(), 0.0);
-        }
+        let mut v = v;
 
-        let mut i = 0;
-        while i < n {
+        let mut r = 0;
+        let mut c = 0;
+        while r < n && c < n {
             // iterate through columns
-            if let Some((p_i, pivot)) = result
+            if let Some(p_i) = result
                 .entries
                 .iter()
                 .enumerate()
-                .skip(i)
-                .find_map(|(p_i, r)| (r[i] != 0.0).then(|| (p_i, r[i])))
+                .skip(r)
+                .find_map(|(p_i, row)| ((row >> c) & 1 != 0).then(|| p_i))
             {
-                if i != p_i {
-                    result.entries.swap(i, p_i);
+                if r != p_i {
+                    result.entries.swap(r, p_i);
+
+                    let a = (v >> r) & 1;
+                    v &= !(1 << r);
+                    v |= ((v >> p_i) & 1) << r;
+                    v &= !(1 << p_i);
+                    v |= a << p_i;
                 }
 
-                for j in i + 1..self.rows_count() {
+                for j in (r + 1)..result.height {
                     // following rows
-                    if result.entries[j][i] != 0.0 {
-                        for k in 0..self.cols_count() {
-                            // following columns
-                            result.entries[j][k] -= result.entries[i][k];
-                        }
-                        v[j] -= v[i];
+                    if (result.entries[j] >> c) & 1 != 0 {
+                        // following columns
+                        result.entries[j] ^= result.entries[r];
+
+                        v ^= ((v >> c) & 1) << j;
                     }
                 }
 
-                for k in 0..self.cols_count() {
-                    result.entries[i][k] *= 1.0 / pivot;
-                }
-
-                i += 1;
+                c += 1;
+                r += 1;
             } else {
-                // only zeros in column
-                if let Some(next_i) = result.entries[i]
-                    .iter()
-                    .enumerate()
-                    .skip(i + 1)
-                    .find_map(|(index, &val)| (val != 0.0).then(|| index))
-                {
-                    result.swap_cols(i, next_i);
-                    if i < v.len() && next_i < v.len() {
-                        v.swap(i, next_i);
-                    }
-                } else {
-                    break;
-                }
+                c += 1;
+                linear_dependent_cols.push(c);
             }
         }
 
         // clear columns
         for i in (0..n).rev() {
             // diagonal
-            if result.entries[i][i] != 0.0 {
+            if (result.entries[i] >> i) & 1 != 0 {
                 for j in (0..i).rev() {
                     // entries above diagonal
-                    let factor = result.entries[j][i] / result.entries[i][i];
-                    for k in 0..self.cols_count() {
-                        result.entries[j][k] -= factor * result.entries[i][k];
+                    if (result.entries[j] >> i) & 1 != 0 {
+                        result.entries[j] ^= result.entries[i];
+
+                        v ^= ((v >> i) & 1) << j;
                     }
-                    v[j] -= factor * v[i];
                 }
             }
         }
 
         (result, v)
+    }
+
+    fn get_columns(&self, range: std::ops::Range<usize>) -> Vec<u32> {
+        let mut result: Vec<u32> = vec![0; range.len()];
+        self.entries.iter().enumerate().for_each(|(j, row)| {
+            for i in range.clone() {
+                result[i - range.start] |= ((row >> i) & 1) << j;
+            }
+        });
+
+        result
     }
 }
 
@@ -233,31 +158,31 @@ impl From<String> for Machine {
     fn from(value: String) -> Self {
         let parts = value.trim().split_whitespace();
 
-        let mut indicator_lights: Vec<f32> = vec![];
-        let mut buttons: Vec<Vec<f32>> = vec![];
+        let mut indicator_lights: u32 = 0;
+        let mut buttons: Vec<u32> = vec![];
         let mut joltages = vec![];
-        let mut buttons_count = 0;
+        let mut buttons_count: usize = 0;
 
         for part in parts {
             match part.chars().nth(0) {
                 Some('[') => {
                     indicator_lights = part[1..part.len()]
                         .chars()
-                        .filter_map(|c| match c {
-                            '.' => Some(0.0),
-                            '#' => Some(1.0),
+                        .enumerate()
+                        .filter_map(|(i, c)| match c {
+                            '#' => Some(1 << i),
                             _ => None,
                         })
-                        .collect();
+                        .sum();
 
-                    buttons_count = indicator_lights.len();
+                    buttons_count = part.len() - 2;
                 }
                 Some('(') => {
-                    let mut result = vec![0.0; buttons_count];
+                    let mut result = 0;
                     part[1..part.len() - 1]
                         .split(',')
-                        .filter_map(|num| num.parse::<usize>().ok())
-                        .for_each(|index| result[index] = 1.0);
+                        .filter_map(|num| num.parse::<u32>().ok())
+                        .for_each(|index| result |= 1 << index);
 
                     buttons.push(result);
                 }
@@ -275,52 +200,75 @@ impl From<String> for Machine {
             indicator_lights,
             buttons,
             joltages,
+            buttons_count,
         }
     }
 }
 
 impl Machine {
-    // fn get_fewest_presses(&self) -> u64 {
-    //     let mut states = self.buttons.clone();
-    //     let mut counter = 1;
+    fn get_min_presses(b: u32, vs: &Vec<u32>, n: usize, coefficients: &mut Vec<usize>) -> u32 {
+        let mut min_presses = b.count_ones();
 
-    //     while !states.contains(&self.indicator_lights) {
-    //         let next_states = states
-    //             .iter()
-    //             .map(|state| {
-    //                 self.buttons
-    //                     .iter()
-    //                     .filter_map(|button| match state ^ button {
-    //                         0 => None,
-    //                         new_state => Some(new_state),
-    //                     })
-    //                     .collect::<Vec<u32>>()
-    //             })
-    //             .flatten()
-    //             .collect::<Vec<u32>>();
+        let last_coeff = match coefficients.last() {
+            Some(&coeff) => coeff + 1,
+            None => 0,
+        };
 
-    //         states = next_states;
-    //         counter += 1;
-    //     }
+        if coefficients.len() < vs.len() {
+            for i in last_coeff..vs.len() {
+                coefficients.push(i);
+                let presses =
+                    Self::get_min_presses((b ^ vs[i]) | (1 << (n + i)), vs, n, coefficients);
+                coefficients.pop();
+                min_presses = min_presses.min(presses);
+            }
+        }
+        min_presses
+    }
 
-    //     counter
-    // }
+    fn get_fewest_presses(&self) -> u32 {
+        let mat = F2Matrix::from_cols(self.buttons.clone(), self.buttons_count);
 
-    fn get_fewest_presses(&self) -> u64 {
-        let mat = Matrix::from_cols(self.buttons.clone());
-
-        let (mut inv, mut b) = mat.gauss(&self.indicator_lights);
-        inv.entries.iter_mut().for_each(|row| {
-            row.iter_mut()
-                .for_each(|entry| *entry = entry.rem_euclid(2.0).abs())
-        });
-
-        b.iter_mut().for_each(|v| *v = v.rem_euclid(2.0));
-
+        let (inv, b) = mat.gauss(self.indicator_lights);
         println!("{inv:?}");
-        println!("{b:?}");
+        println!("{b:#b}");
 
-        0
+        // solution
+        let mut i = 0;
+        while i < inv.entries.len() && (inv.entries[i] >> i) & 1 == 1 {
+            i += 1;
+        }
+
+        let vs = inv.get_columns(i..inv.height);
+
+        let mut coefficients: Vec<usize> = vec![];
+        Self::get_min_presses(b, &vs, i, &mut coefficients)
+    }
+
+    fn get_fewest_presses_old(&self) -> u32 {
+        let mut states = self.buttons.clone();
+        let mut counter = 1;
+
+        while !states.contains(&self.indicator_lights) {
+            let next_states = states
+                .iter()
+                .map(|state| {
+                    states
+                        .iter()
+                        .filter_map(|button| match state ^ button {
+                            0 => None,
+                            new_state => Some(new_state),
+                        })
+                        .collect::<Vec<u32>>()
+                })
+                .flatten()
+                .collect::<Vec<u32>>();
+
+            states = next_states;
+            counter += 1;
+        }
+
+        counter
     }
 }
 
@@ -331,16 +279,47 @@ fn main() {
         "
     .to_string();
     // let input = std::fs::read_to_string("src/10_factory/data.txt").unwrap();
+    let lines: Vec<&str> = input.trim().split("\r\n").collect();
 
-    let machines = input
-        .trim()
-        .split("\r\n")
+    let machines = lines
+        .iter()
         .map(|line| Machine::from(line.to_string()))
         .collect::<Vec<Machine>>();
 
-    machines.iter().for_each(|machine| {
-        machine.get_fewest_presses();
-    });
+    println!(
+        "Min total presses: {}",
+        machines
+            .iter()
+            .enumerate()
+            .map(|(i, machine)| {
+                let a = machine.get_fewest_presses();
+                // let b = machine.get_fewest_presses_old();
+
+                // if a != b {
+                //     println!("a={a} b={b}");
+                //     println!("{}", lines[i]);
+
+                //     let mat = F2Matrix::from_cols(machine.buttons.clone(), machine.buttons_count);
+                //     println!("{mat:?}");
+
+                //     let (inv, b) = mat.gauss(machine.indicator_lights);
+                //     println!("{inv:?}\r\n{b:?}");
+
+                //     let mut i = 0;
+                //     while i < inv.entries.len() && (inv.entries[i] >> i) & 1 == 1 {
+                //         i += 1;
+                //     }
+
+                //     let vs = inv.get_columns(i..inv.height);
+
+                //     let mut coefficients: Vec<usize> = vec![];
+                //     Machine::get_min_presses(b, &vs, i, &mut coefficients);
+                // }
+
+                a
+            })
+            .sum::<u32>()
+    );
 
     // let fewest_total_presses = machines
     //     .iter()
